@@ -212,7 +212,7 @@ class ZoteroAnnotationsNotes:
         }
         if "creators" in data:
             metadata["creators"] = [
-                creator.get("firstName", "") + " " + creator.get("lastName", "")
+                creator["firstName"] + " " + creator["lastName"]
                 for creator in data["creators"]
             ]
         if "attachment" in top_item["links"] and top_item["links"]["attachment"]["attachmentType"] == "application/pdf":
