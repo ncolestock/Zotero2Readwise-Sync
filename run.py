@@ -369,7 +369,7 @@ class Readwise:
                 for index, element in enumerate(highlights):
                     error = errors[index]
                     if (len(error.keys()) > 0):
-                        mappedErrors = mappedErrors.append({"error": error, "highlight": element.get("highlight_url","")})
+                        mappedErrors.append({"error": error, "highlight": element.get("highlight_url","")})
                         print(element.get("highlight_url","") + " :" + repr(error))
                 dump(json.dumps(mappedErrors), f)
             raise Zotero2ReadwiseError(
