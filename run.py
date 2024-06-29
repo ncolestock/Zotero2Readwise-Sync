@@ -212,7 +212,7 @@ class ZoteroAnnotationsNotes:
         }
         if "creators" in data:
             metadata["creators"] = [
-                creator["firstName"] + " " + creator["lastName"]
+                creator.get("firstName", "") + " " + creator.get("lastName", "")
                 for creator in data["creators"]
             ]
         if "attachment" in top_item["links"] and top_item["links"]["attachment"]["attachmentType"] == "application/pdf":
@@ -282,7 +282,8 @@ class ZoteroAnnotationsNotes:
             try:
                 if len(self.filter_colors) == 0 or annot["data"]["annotationColor"] in self.filter_colors:
                     formatted_annots.append(self.format_item(annot))
-            except:
+            except Exception as error:
+                print(annot["links"]["alternate"]["href"] + ":" + repr(error))
                 self.failed_items.append(annot)
                 continue
 
@@ -368,7 +369,7 @@ class Readwise:
                 for index, element in enumerate(highlights):
                     error = errors[index]
                     if (len(error.keys()) > 0):
-                        error.highlight = element.highlight_url
+                        error.highlight = element.get("highlight_url","")
                         mappedErrors = mappedErrors.append(error)
                         print(error)
                 dump(json.dumps(mappedErrors), f)
