@@ -283,7 +283,7 @@ class ZoteroAnnotationsNotes:
                 if len(self.filter_colors) == 0 or annot["data"]["annotationColor"] in self.filter_colors:
                     formatted_annots.append(self.format_item(annot))
             except Exception as error:
-                print(annot["links"]["alternate"]["href"] + ":" + repr(error))
+                print(annot["links"]["alternate"]["href"] + " :" + repr(error))
                 self.failed_items.append(annot)
                 continue
 
