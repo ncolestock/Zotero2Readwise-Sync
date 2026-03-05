@@ -31,7 +31,7 @@ jobs:
           python-version: "3.8"
 
       - name: 💿 Install Python dependencies
-        run: pip install pyzotero requests
+        run: pip install
 
       - name: 🚀 Run Automation
         env:
