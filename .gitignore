@@ -1,0 +1,7 @@
+zotero2readwise_sync.egg-info
+build
+.env
+failed_zotero_items.json
+/succeeded_zotero_items.json
+/synced_item_keys.json
+/since

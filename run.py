@@ -8,7 +8,8 @@ from pyzotero.zotero import Zotero
 from pyzotero import zotero_errors
 from pathlib import Path
 from os import environ
-import json 
+import json
+
 
 ParamNotPassed = getattr(zotero_errors, "ParamNotPassed", zotero_errors.ParamNotPassedError)
 UnsupportedParams = getattr(zotero_errors, "UnsupportedParams", zotero_errors.UnsupportedParamsError)
@@ -222,6 +223,7 @@ class ZoteroAnnotationsNotes:
     def __init__(self, zotero_client: Zotero, filter_colors: List[str]):
         self.zot = zotero_client
         self.failed_items: List[Dict] = []
+        self.succeeded_items: List[ZoteroItem] = []
         self._cache: Dict = {}
         self._parent_mapping: Dict = {}
         self.filter_colors: List[str] = filter_colors
@@ -261,7 +263,8 @@ class ZoteroAnnotationsNotes:
         }
         if "creators" in data:
             metadata["creators"] = [
-                creator["firstName"] + " " + creator["lastName"]
+                creator["name"] if "name" in creator
+                else creator["firstName"] + " " + creator["lastName"]
                 for creator in data["creators"]
             ]
         if "attachment" in top_item["links"] and top_item["links"]["attachment"]["attachmentType"] == "application/pdf":
@@ -343,6 +346,7 @@ class ZoteroAnnotationsNotes:
                 f"You can run `save_failed_items_to_json()` class method to save those items."
             )
         print(finished_msg)
+        self.succeeded_items = formatted_annots
         return formatted_annots
 
     def save_failed_items_to_json(self, json_filepath_failed_items: str = None):
@@ -355,6 +359,17 @@ class ZoteroAnnotationsNotes:
         with open(out_filepath, "w") as f:
             dump(self.failed_items, f, indent=4)
         print(f"\nZOTERO: Detail of failed items are saved into {out_filepath}\n")
+
+    def save_succeeded_items_to_json(self, json_filepath_succeeded_items: str = None):
+        FAILED_ITEMS_DIR.mkdir(parents=True, exist_ok=True)
+        if json_filepath_succeeded_items:
+            out_filepath = FAILED_ITEMS_DIR.joinpath(json_filepath_succeeded_items)
+        else:
+            out_filepath = FAILED_ITEMS_DIR.joinpath("succeeded_zotero_items.json")
+
+        with open(out_filepath, "w") as f:
+            dump([item.__dict__ for item in self.succeeded_items], f, indent=4)
+        print(f"\nZOTERO: Detail of succeeded items are saved into {out_filepath}\n")
 
 @dataclass
 class ReadwiseAPI:
@@ -557,6 +572,7 @@ class Zotero2Readwise:
             A list of dictionaries representing the retrieved Zotero items.
             """
             items = []
+
             if self.include_annots:
                 items.extend(self.retrieve_all("annotation", self.since))
 
@@ -586,6 +602,9 @@ class Zotero2Readwise:
         if self.zotero.failed_items:
             self.zotero.save_failed_items_to_json("failed_zotero_items.json")
 
+        if (self.zotero.succeeded_items):
+            self.zotero.save_succeeded_items_to_json("succeeded_zotero_items.json")
+
         self.readwise.post_zotero_annotations_to_readwise(formatted_items)
 
         if self.use_synced_keys and formatted_items:
@@ -612,7 +631,7 @@ class Zotero2Readwise:
             print(f"Retrieving {item_type}s since last run from Zotero Database")
 
         print("It may take some time...")
-        query = self.zotero_client.items(itemType={item_type}, since=since)
+        query = self.zotero_client.items(itemType=item_type, since=since)
         return self.zotero_client.everything(query)
 
 
@@ -620,14 +639,21 @@ if __name__ == "__main__":
     parser = ArgumentParser(description="Generate Markdown files")
     parser.add_argument(
         "readwise_token",
+        nargs='?',
         help="Readwise Access Token (visit https://readwise.io/access_token)",
+        default=environ.get('READWISE_TOKEN')
     )
     parser.add_argument(
-        "zotero_key", help="Zotero API key (visit https://www.zotero.org/settings/keys)"
+        "zotero_key",
+        nargs='?',
+        help="Zotero API key (visit https://www.zotero.org/settings/keys)",
+        default=environ.get('ZOTERO_KEY')
     )
     parser.add_argument(
         "zotero_library_id",
+        nargs='?',
         help="Zotero User ID (visit https://www.zotero.org/settings/keys)",
+        default=environ.get('ZOTERO_ID')
     )
     parser.add_argument(
         "--library_type",
@@ -663,7 +689,6 @@ if __name__ == "__main__":
         action='store_true',
         help="Skip Zotero item keys that were already synced in previous runs"
     )
-
     args = vars(parser.parse_args())
 
     # Cast str to bool values for bool flags
