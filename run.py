@@ -5,9 +5,13 @@ from json import dump
 from typing import Dict, List, Optional, Union
 import requests
 from pyzotero.zotero import Zotero
-from pyzotero.zotero_errors import ParamNotPassed, UnsupportedParams
+from pyzotero import zotero_errors
 from pathlib import Path
+from os import environ
 import json 
+
+ParamNotPassed = getattr(zotero_errors, "ParamNotPassed", zotero_errors.ParamNotPassedError)
+UnsupportedParams = getattr(zotero_errors, "UnsupportedParams", zotero_errors.UnsupportedParamsError)
 
 TOP_DIR = Path(__file__).parent
 FAILED_ITEMS_DIR = TOP_DIR

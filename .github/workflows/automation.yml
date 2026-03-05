@@ -30,8 +30,8 @@ jobs:
         with:
           python-version: "3.8"
 
-      - name: 💿 Install pyzotero Python package
-        run: pip install pyzotero
+      - name: 💿 Install Python dependencies
+        run: pip install pyzotero requests
 
       - name: 🚀 Run Automation
         run: python run.py ${{ secrets.READWISE_TOKEN }} ${{ secrets.ZOTERO_KEY }} ${{ secrets.ZOTERO_ID }} --use_since --skip_previously_synced

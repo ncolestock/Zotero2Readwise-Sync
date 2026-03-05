@@ -7,6 +7,8 @@ integration using the [Zotero2Readwise](https://github.com/e-alizadeh/Zotero2Rea
 # Instructions
 **You just need to fork this repository and add the following secrets to your git repository secrets, 
 and you're ready to go!**
+
+This workflow installs both `pyzotero` and `requests` at runtime because the sync script depends on both packages.
 - Readwise Access Token (secret name: **READWISE_TOKEN**)
 - Zotero Key (secret name: **ZOTERO_KEY**)
 - Zotero Library ID (secret name: **ZOTERO_ID**)
