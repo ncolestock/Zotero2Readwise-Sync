@@ -7,6 +7,8 @@ integration using the [Zotero2Readwise](https://github.com/e-alizadeh/Zotero2Rea
 # Instructions
 **You just need to fork this repository and add the following secrets to your git repository secrets, 
 and you're ready to go!**
+
+This workflow installs both `pyzotero` and `requests` at runtime because the sync script depends on both packages.
 - Readwise Access Token (secret name: **READWISE_TOKEN**)
 - Zotero Key (secret name: **ZOTERO_KEY**)
 - Zotero Library ID (secret name: **ZOTERO_ID**)
@@ -26,10 +28,10 @@ Once you come up with the desired schedule, update the cron argument in `.github
 
 ```yaml
   schedule:
-    - cron: "0 3 * * 1,3,5"
+    - cron: "0 3 * * *"
 ```
 *Above is the default schedule I've set up to run the automation.*
-The cron expression means to run the automation **at 03:00 AM every Monday, Wednesday, and Friday**. 
+The cron expression means to run the automation **at 03:00 AM every day**. 
 You can change the schedule as you wish. Just make sure that your cron job expression is valid by checking 
 
 A scheduled GitHub Action will show **scheduled** next to the deployment as can be seen below. 
@@ -41,16 +43,20 @@ A scheduled GitHub Action will show **scheduled** next to the deployment as can 
 
 
 # Manual Trigger
-If you want to manually trigger the automation, you can simply commit an empty message and push it to your forked repo, 
-like the following:
-```shell
-git commit --allow-empty -m "Trigger automation"
-```
-and then,
-```shell
-git push
-```
-This will run the automation immediately and won't impact your scheduled automation.
+You can manually trigger the automation from GitHub Actions without pushing any commit:
+1. Open your repository on GitHub.
+2. Go to **Actions**.
+3. Open **Zotero to Readwise Automation** workflow.
+4. Click **Run workflow**.
+
+This runs the sync immediately and does not affect the daily schedule.
+
+# Avoiding duplicate highlights
+The workflow runs the script with `--use_since --skip_previously_synced` to prevent duplicates in two layers:
+1. `since` tracks the last synced Zotero library version (incremental fetch).
+2. `synced_item_keys.json` tracks Zotero item keys already pushed to Readwise (idempotency guard).
+
+Both files are restored/saved through GitHub Actions cache between workflow runs, so revisiting a document later does not re-upload existing highlights.
 
 # Note
 *Keep in mind that GitHub Actions may run the scheduled automation with some delay (sometimes with one-hour delay!).*

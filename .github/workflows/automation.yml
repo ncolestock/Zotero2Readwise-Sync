@@ -1,11 +1,9 @@
 name: Zotero to Readwise Automation
 
 on:
-  push:
-    branches:
-      - master
+  workflow_dispatch:
   schedule:
-    - cron: "0 3 * * 1,5" # Runs at 03:00 AM (UTC) every day (Check https://crontab.guru/)
+    - cron: "0 3 * * *" # Runs at 03:00 AM (UTC) every day (Check https://crontab.guru/)
 
 jobs:
   zotero-to-readwise-automation:
@@ -16,13 +14,33 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: ♻️ Restore last synced Zotero version
+        id: sync-cache-restore
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            since
+            synced_item_keys.json
+          key: zotero-since-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            zotero-since-${{ github.ref_name }}-
+
       - name: 🐍 Set up Python 3.8
         uses: actions/setup-python@v5
         with:
           python-version: "3.8"
 
-      - name: 💿 Install pyzotero Python package
-        run: pip install pyzotero
+      - name: 💿 Install Python dependencies
+        run: pip install pyzotero requests
 
       - name: 🚀 Run Automation
-        run: python run.py ${{ secrets.READWISE_TOKEN }} ${{ secrets.ZOTERO_KEY }} ${{ secrets.ZOTERO_ID }}
+        run: python run.py ${{ secrets.READWISE_TOKEN }} ${{ secrets.ZOTERO_KEY }} ${{ secrets.ZOTERO_ID }} --use_since --skip_previously_synced
+
+      - name: ♻️ Save last synced Zotero version
+        if: ${{ success() }}
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            since
+            synced_item_keys.json
+          key: ${{ steps.sync-cache-restore.outputs.cache-primary-key }}

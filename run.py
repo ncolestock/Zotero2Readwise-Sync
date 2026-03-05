@@ -1,17 +1,44 @@
 from argparse import ArgumentParser
-from distutils.util import strtobool
 from dataclasses import dataclass, field
 from enum import Enum
 from json import dump
 from typing import Dict, List, Optional, Union
 import requests
 from pyzotero.zotero import Zotero
-from pyzotero.zotero_errors import ParamNotPassed, UnsupportedParams
+from pyzotero import zotero_errors
 from pathlib import Path
+from os import environ
 import json 
+
+def resolve_zotero_error(*names: str):
+    """Resolve pyzotero error class across version-specific names."""
+    for name in names:
+        err = getattr(zotero_errors, name, None)
+        if err is not None:
+            return err
+    raise AttributeError(f"Could not resolve any pyzotero error class from: {names}")
+
+
+ParamNotPassed = resolve_zotero_error("ParamNotPassed", "ParamNotPassedError")
+UnsupportedParams = resolve_zotero_error("UnsupportedParams", "UnsupportedParamsError")
 
 TOP_DIR = Path(__file__).parent
 FAILED_ITEMS_DIR = TOP_DIR
+
+
+
+def parse_bool_flag(value: str, flag_name: str) -> bool:
+    """Parse yes/no style CLI values into bool without distutils dependency."""
+    normalized = value.strip().lower()
+    truthy = {"y", "yes", "t", "true", "on", "1"}
+    falsy = {"n", "no", "f", "false", "off", "0"}
+
+    if normalized in truthy:
+        return True
+    if normalized in falsy:
+        return False
+
+    raise ValueError(f"Invalid value for --{flag_name}. Use 'n' or 'y' (default).")
 
 def sanitize_tag(tag: str) -> str:
     """Clean tag by replacing empty spaces with underscore.
@@ -59,6 +86,37 @@ def write_library_version(zotero_client):
     """
     with open('since', 'w', encoding='utf-8') as file:
         file.write(str(zotero_client.last_modified_version()))
+
+
+def read_synced_item_keys() -> set:
+    """
+    Read previously synced Zotero item keys from a local state file.
+
+    Returns
+    -------
+    set
+        A set of Zotero item keys that have already been synced to Readwise.
+    """
+    state_file = Path("synced_item_keys.json")
+    if not state_file.exists():
+        return set()
+
+    try:
+        data = json.loads(state_file.read_text(encoding="utf-8"))
+        keys = data.get("keys", [])
+        if not isinstance(keys, list):
+            return set()
+        return {str(key) for key in keys}
+    except (json.JSONDecodeError, OSError):
+        print("synced_item_keys.json is invalid or unreadable. Starting with empty state.")
+        return set()
+
+
+def write_synced_item_keys(synced_keys: set) -> None:
+    """Persist synced Zotero item keys to local state file."""
+    state_file = Path("synced_item_keys.json")
+    payload = {"keys": sorted(synced_keys)}
+    state_file.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         
 class Zotero2ReadwiseError(Exception):
     def __init__(self, message: str):
@@ -485,7 +543,8 @@ class Zotero2Readwise:
         include_annotations: bool = True,
         include_notes: bool = False,
         filter_colors: List[str] = [],
-        since: int = 0
+        since: int = 0,
+        use_synced_keys: bool = False
     ):
         self.readwise = Readwise(readwise_token)
         self.zotero_client = get_zotero_client(
@@ -497,6 +556,7 @@ class Zotero2Readwise:
         self.include_annots = include_annotations
         self.include_notes = include_notes
         self.since = since
+        self.use_synced_keys = use_synced_keys
 
     def get_all_zotero_items(self) -> List[Dict]:
             """
@@ -520,12 +580,26 @@ class Zotero2Readwise:
         if zot_annots_notes is None:
             zot_annots_notes = self.get_all_zotero_items()
 
+        synced_keys = read_synced_item_keys() if self.use_synced_keys else set()
+        if self.use_synced_keys:
+            before_count = len(zot_annots_notes)
+            zot_annots_notes = [
+                item for item in zot_annots_notes if item["data"]["key"] not in synced_keys
+            ]
+            skipped = before_count - len(zot_annots_notes)
+            if skipped > 0:
+                print(f"Skipping {skipped} previously synced Zotero items.")
+
         formatted_items = self.zotero.format_items(zot_annots_notes)
 
         if self.zotero.failed_items:
             self.zotero.save_failed_items_to_json("failed_zotero_items.json")
 
         self.readwise.post_zotero_annotations_to_readwise(formatted_items)
+
+        if self.use_synced_keys and formatted_items:
+            synced_keys.update(item.key for item in formatted_items)
+            write_synced_item_keys(synced_keys)
     
     def retrieve_all(self, item_type: str, since: int = 0):
         """
@@ -593,17 +667,17 @@ if __name__ == "__main__":
         action='store_true',
         help="Include Zotero items since last run"
     )
+    parser.add_argument(
+        "--skip_previously_synced",
+        action='store_true',
+        help="Skip Zotero item keys that were already synced in previous runs"
+    )
 
     args = vars(parser.parse_args())
 
     # Cast str to bool values for bool flags
     for bool_arg in ["include_annotations", "include_notes"]:
-        try:
-            args[bool_arg] = bool(strtobool(args[bool_arg]))
-        except ValueError:
-            raise ValueError(
-                f"Invalid value for --{bool_arg}. Use 'n' or 'y' (default)."
-            )
+        args[bool_arg] = parse_bool_flag(args[bool_arg], bool_arg)
 
     since = read_library_version() if args["use_since"] else 0
     zt2rw = Zotero2Readwise(
@@ -614,7 +688,8 @@ if __name__ == "__main__":
         include_annotations=args["include_annotations"],
         include_notes=args["include_notes"],
         filter_colors=args["filter_color"],
-        since=since
+        since=since,
+        use_synced_keys=args["skip_previously_synced"]
     )
     zt2rw.run()
     if args["use_since"]:
